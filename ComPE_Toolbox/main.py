@@ -74,7 +74,7 @@ def install_to_movable_disk():  # 安装到可移动磁盘
             with open("./movabledisk.txt", "w") as f:
                 f.write("SELECT DISK " + str(par_get_disk(disks[disk][0:2])) +
                         "\nSELECT PARTITION " + str(getparnum(disks[disk][0:2])) +
-                        "\nFORMAT FS=FAT32 QUICK" +
+                        "\nFORMAT FS=NTFS QUICK" +
                         "\nACTIVE")
         elif cmd == 1:
             init_disk()
