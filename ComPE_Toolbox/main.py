@@ -66,6 +66,8 @@ def install_to_movable_disk():  # 安装到可移动磁盘
     disks = getpars()
     disk = select("您 的 计 算 机 含 有 以 下 可 移 动 磁 盘 分 区 ，\n请 选 择 安 装 到 的 磁 盘 位 置 ：", disks)
     print("您选择了", disks[disk][0:2])
+    formatdisk = select("请 选 择 启 动 方 案 ：",["1.USB-HDD(硬 盘 启 动 模 式 ， 可 多 分 区 ， 可 兼 容 传 统 BIOS/UEFI启 动 )","2.USB-ZIP(软 盘 启 动 模 式 ， 仅 单 分 区 ， 仅 支 持 传 统 BIOS启 动 )","3.USB-FDD(超 级 软 盘 启 动 模 式 ， 仅 单 分 区 ， 可 兼 容 传 统 BIOS/UEFI启 动 )","4.USB-CDROM(光 盘 启 动 模 式 ， 仅 单 分 区 ， 可 兼 容 传 统 BIOS/UEFI启 动 )"])
+    formatid = ["06","5a","0c","0f"]
     print("警告！本操作会清楚您选择的磁盘数据，请再三确认备份好后，按下任意键继续...")
     os.system("pause>nul")
     print("准备开始写入...")
@@ -74,6 +76,7 @@ def install_to_movable_disk():  # 安装到可移动磁盘
             with open("./movabledisk.txt", "w") as f:
                 f.write("SELECT DISK " + str(par_get_disk(disks[disk][0:2])) +
                         "\nSELECT PARTITION " + str(getparnum(disks[disk][0:2])) +
+                        "\nSET ID="+formatid[formatdisk]+" override"+
                         "\nFORMAT FS=NTFS QUICK" +
                         "\nACTIVE")
         elif cmd == 1:
@@ -143,11 +146,11 @@ def install_to_BCD():
             "bcdedit /displayorder "+guid1+" /addlast"
             ]
     print("正在写入系统...")
-    print("============================================================")
-    for cmd in cmds:
-        scode=os.system(cmd)
+    print("===========================p=================================")
+    for cmd in tqdm.tqdm(cmds):
+        scode=os.popen(cmd).read()
         if not scode == 0:
-            os.system("del /s /f /q .\\runtime>nul")
+            os.popen("del /s /f /q .\\runtime").read()
             print("程序运行失败！请确认程序是否完整，以及是否被安全软件误处理。请按任意键退出本程序...")
             os._exit(1)
     shutil.copyfile(".\\runtime\\uninstall.exe",disks[disk][0:3]+"sources\\uninstall.exe")
@@ -160,6 +163,7 @@ def install_to_BCD():
 
 
 if __name__ == '__main__':
+    os.system("title ComPE工具箱")
     while True:
         os.system("cls")
         mode = select(
