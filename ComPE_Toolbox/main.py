@@ -1,5 +1,34 @@
-import pick, zipfile, os, time, psutil, wmi, tqdm,sys,shutil
+import pick, zipfile, os, time, psutil, wmi, tqdm,sys,shutil,ctypes
+import sys
 
+# Define the constants for the firmware types
+FirmwareTypeUnknown = 0
+FirmwareTypeBios = 1
+FirmwareTypeUefi = 2
+
+# Define the function prototype for GetFirmwareType
+GetFirmwareType = ctypes.windll.kernel32.GetFirmwareType
+GetFirmwareType.argtypes = [ctypes.POINTER(ctypes.c_uint)]
+GetFirmwareType.restype = ctypes.c_bool
+
+# Create a variable to store the firmware type
+firmware_type = ctypes.c_uint()
+
+# Call the function and check the result
+def HowtoBoot():
+    if GetFirmwareType(ctypes.byref(firmware_type)):
+    # The function succeeded, print the firmware type
+        if firmware_type.value == FirmwareTypeUnknown:
+            return "Unknown"
+        elif firmware_type.value == FirmwareTypeBios:
+            return "Legacy/BIOS"
+        elif firmware_type.value == FirmwareTypeUefi:
+            return "UEFI"
+        else:
+            return "INVAILD"
+    else:
+    # The function failed, print the error code
+        return "Unknown"
 
 def select(title, menu):
     selected, option = pick.pick(menu, title, indicator="→")
@@ -77,7 +106,7 @@ def install_to_movable_disk():  # 安装到可移动磁盘
                 f.write("SELECT DISK " + str(par_get_disk(disks[disk][0:2])) +
                         "\nSELECT PARTITION " + str(getparnum(disks[disk][0:2])) +
                         "\nSET ID="+formatid[formatdisk]+" override"+
-                        "\nFORMAT FS=NTFS QUICK" +
+                        "\nFORMAT FS=FAT32 QUICK" +
                         "\nACTIVE")
         elif cmd == 1:
             init_disk()
@@ -117,6 +146,7 @@ def init_disk():
         os._exit(1)
 
 def install_to_BCD():
+    boot = HowtoBoot()
     print("正在获取系统磁盘分区列表...")
     disks = getsystempars()
     disk = select("您 的 计 算 机 含 有 以 下 系 统 磁 盘 分 区 ，\n请 选 择 安 装 到 的 磁 盘 位 置 ：", disks)
@@ -130,26 +160,43 @@ def install_to_BCD():
     for name in zip.namelist():
         zip.extract(name, "./runtime")
     zip.close()
-    print
-    cmds = [".\\runtime\\7z.exe e .\\runtime\\ISO\\ComPE_Release.iso \"sources\\boot.wim\" -o"+disks[disk][0:3]+"sources",
-            ".\\runtime\\7z.exe e .\\runtime\\ISO\\ComPE_Release.iso \"boot\\boot.sdi\" -o" + disks[disk][0:3] + "sources",
-            "bcdedit /create "+guid1+" /d \"进入ComPE维护系统\" /application osloader",
-            "bcdedit /create "+guid2+" /device",
-            "bcdedit /set "+guid2+" ramdisksdidevice partition=\""+disks[disk][0:2]+"\"",
-            "bcdedit /set "+guid2+" ramdisksdipath \\sources\\boot.sdi",
-            "bcdedit /set "+guid1+" device ramdisk=\"["+disks[disk][0:2]+"]\\sources\\boot.wim,"+guid2,
-            "bcdedit /set "+guid1+" osdevice ramdisk=\"["+disks[disk][0:2]+"]\\sources\\boot.wim,"+guid2,
-            "bcdedit /set "+guid1+" path \\windows\\system32\\boot\\winload.exe",
-            "bcdedit /set "+guid1+" systemroot \\windows",
-            "bcdedit /set "+guid1+" detecthal yes",
-            "bcdedit /set "+guid1+" winpe yes",
-            "bcdedit /displayorder "+guid1+" /addlast"
-            ]
+    if boot == "Legacy/BIOS":
+        cmds = [".\\runtime\\7z.exe e -aoa .\\runtime\\ISO\\ComPE_Release.iso \"sources\\boot.wim\" -o"+disks[disk][0:3]+"sources",
+                ".\\runtime\\7z.exe e -aoa .\\runtime\\ISO\\ComPE_Release.iso \"boot\\boot.sdi\" -o" + disks[disk][0:3] + "sources",
+                "bcdedit /create "+guid1+" /d \"进入ComPE维护系统\" /application osloader",
+                "bcdedit /create "+guid2+" /device",
+                "bcdedit /set "+guid2+" ramdisksdidevice partition=\""+disks[disk][0:2]+"\"",
+                "bcdedit /set "+guid2+" ramdisksdipath \\sources\\boot.sdi",
+                "bcdedit /set "+guid1+" device ramdisk=\"["+disks[disk][0:2]+"]\\sources\\boot.wim,"+guid2,
+                "bcdedit /set "+guid1+" osdevice ramdisk=\"["+disks[disk][0:2]+"]\\sources\\boot.wim,"+guid2,
+                "bcdedit /set "+guid1+" path \\windows\\system32\\boot\\winload.exe",
+                "bcdedit /set "+guid1+" systemroot \\windows",
+                "bcdedit /set "+guid1+" detecthal yes",
+                "bcdedit /set "+guid1+" winpe yes",
+                "bcdedit /displayorder "+guid1+" /addlast"
+                ]
+    elif boot == "UEFI":
+            cmds = [".\\runtime\\7z.exe x -r -aoa .\\runtime\\ISO\\ComPE_Release.iso -o" + disks[disk][
+                                                                                                     0:3],
+	            "bcdboot %systemroot% /s "+systempar +" /f UEFI",
+                "bcdedit /create " + guid1 + " /d \"进入ComPE维护系统\" /application osloader",
+                "bcdedit /create " + guid2 + " /device",
+                "bcdedit /set " + guid2 + " ramdisksdidevice partition=\"" + disks[disk][0:2] + "\"",
+                "bcdedit /set " + guid2 + " ramdisksdipath \\boot\\boot.sdi",
+                "bcdedit /set " + guid1 + " device ramdisk=\"[" + disks[disk][0:2] + "]\\sources\\boot.wim," + guid2,
+                "bcdedit /set " + guid1 + " osdevice ramdisk=\"[" + disks[disk][0:2] + "]\\sources\\boot.wim," + guid2,
+                "bcdedit /set " + guid1 + " path \\windows\\system32\\boot\\winload.efi",
+                "bcdedit /set " + guid1 + " systemroot \\windows",
+                "bcdedit /set " + guid1 + " detecthal yes",
+                "bcdedit /set " + guid1 + " winpe yes",
+                "bcdedit /displayorder " + guid1 + " /addlast"
+                ]
     print("正在写入系统...")
-    print("===========================p=================================")
+    print("=============================================================")
     for cmd in tqdm.tqdm(cmds):
-        scode=os.popen(cmd).read()
-        if not scode == 0:
+        run=os.popen(cmd)
+        truecode = run.close()
+        if truecode is not None:
             os.popen("del /s /f /q .\\runtime").read()
             print("程序运行失败！请确认程序是否完整，以及是否被安全软件误处理。请按任意键退出本程序...")
             os._exit(1)
@@ -162,12 +209,34 @@ def install_to_BCD():
     os.exit(0)
 
 
+logoacsii = """                                                              
+                                        ,-.----.               
+  ,----..                        ____   \    /  \       ,---,. 
+ /   /   \                     ,'  , `. |   :    \    ,'  .' | 
+|   :     :    ,---.        ,-+-,.' _ | |   |  .\ : ,---.'   | 
+.   |  ;. /   '   ,'\    ,-+-. ;   , || .   :  |: | |   |   .' 
+.   ; /--`   /   /   |  ,--.'|'   |  || |   |   \ : :   :  |-, 
+;   | ;     .   ; ,. : |   |  ,', |  |, |   : .   / :   |  ;/| 
+|   : |     '   | |: : |   | /  | |--'  ;   | |`-'  |   :   .' 
+.   | '___  '   | .; : |   : |  | ,     |   | ;     |   |  |-, 
+'   ; : .'| |   :    | |   : |  |/      :   ' |     '   :  ;/| 
+'   | '/  :  \   \  /  |   | |`-'       :   : :     |   |    \ 
+|   :    /    `----'   |   ;/           |   | :     |   :   .' 
+ \   \ .'              '---'            `---'.|     |   | ,'   
+  `---`                                   `---`     `----'     
+"""
+
+
 if __name__ == '__main__':
     os.system("title ComPE工具箱")
+    if HowtoBoot() == "Unknown" or HowtoBoot() == "INVAILD":
+        print("未识别到正确的系统固件启动方案，程序无法工作，5秒后自动退出... ")
+        time.sleep(5)
+        os._exit(1)
     while True:
         os.system("cls")
         mode = select(
-            "欢 迎 使 用 ComPE工 具 箱\n该 工 具 箱 可 以 帮 助 您 将 ComPE安 装 到 指 定 位 置 \n请 使 用 方 向 键 ↑ ↓ 选 择 安 装 方 式 ：",
+            logoacsii + "欢 迎 使 用 ComPE工 具 箱\n该 工 具 箱 可 以 帮 助 您 将 ComPE安 装 到 指 定 位 置 \n当 前 启 动 方 案 ："+HowtoBoot()+"\n请 使 用 方 向 键 ↑ ↓ 选 择 安 装 方 式 ：",
             ["1.复 制 ISO镜 像 文 件 到 指 定 位 置", "2.安 装 到 可 移 动 磁 盘", "3.安 装 ComPE到 系 统"])
         if mode == 0:
             print("您选择了复制ISO镜像文件到指定位置。")
